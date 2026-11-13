@@ -1,0 +1,172 @@
+name: Build BolSetu Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+env:
+  APP_NAME: BolSetu
+  APP_ID: com.bolsetu.app
+  TTS_RATE: "-8%"
+
+jobs:
+  build-android-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up JDK 17 (Capacitor 6 / SDK 34)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Pre-Cached Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Set up Python (for voice generation)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Prepare web folder
+        run: |
+          mkdir -p www/audio
+          # index.html may live in the repo root or in www/ - both work
+          if [ -f index.html ]; then cp index.html www/index.html; fi
+          test -f www/index.html || { echo "index.html not found (put it in www/ or the repo root)"; exit 1; }
+          # real human recordings committed under audio/<language>-<m|f>/ are used as-is
+          if [ -d audio ]; then cp -rn audio/. www/audio/ 2>/dev/null || true; fi
+
+      - name: Add typefaces (Marathi, Hindi and Latin)
+        continue-on-error: true
+        run: |
+          mkdir -p www/fonts /tmp/fonts
+          cd /tmp/fonts && npm init -y >/dev/null
+          npm install --silent @fontsource/tiro-devanagari-marathi @fontsource/tiro-devanagari-hindi @fontsource/anek-devanagari
+          F=node_modules/@fontsource
+          OUT="$GITHUB_WORKSPACE/www/fonts"
+          cp $F/tiro-devanagari-marathi/files/tiro-devanagari-marathi-devanagari-400-normal.woff2 "$OUT/tiro.woff2" || true
+          cp $F/tiro-devanagari-hindi/files/tiro-devanagari-hindi-devanagari-400-normal.woff2 "$OUT/tiro-hi.woff2" || true
+          cp $F/tiro-devanagari-marathi/files/tiro-devanagari-marathi-latin-400-normal.woff2 "$OUT/tiro-lat.woff2" || true
+          for w in 500 700 800; do
+            cp $F/anek-devanagari/files/anek-devanagari-devanagari-$w-normal.woff2 "$OUT/anek-$w.woff2" || true
+            cp $F/anek-devanagari/files/anek-devanagari-latin-$w-normal.woff2 "$OUT/anek-lat-$w.woff2" || true
+          done
+          ls -la "$OUT"
+
+      - name: Reuse voice clips from earlier builds
+        uses: actions/cache@v4
+        with:
+          path: www/audio
+          key: bolsetu-audio-v1-${{ github.run_id }}
+          restore-keys: |
+            bolsetu-audio-v1-
+
+      - name: Generate voice clips for every language (audio/<language>-<m|f>/<id>.mp3)
+        continue-on-error: true
+        env:
+          # Optional: add these two repository secrets to use the official, licensed Azure Speech service.
+          # Without them the build falls back to the unofficial edge-tts tool (fine for family testing, not for a public release).
+          AZURE_SPEECH_KEY: ${{ secrets.AZURE_SPEECH_KEY }}
+          AZURE_SPEECH_REGION: ${{ secrets.AZURE_SPEECH_REGION }}
+        run: |
+          pip install --quiet edge-tts
+          cat > /tmp/extract.js <<'EOF'
+          const fs = require('fs');
+          const html = fs.readFileSync('www/index.html', 'utf8');
+          const m = html.match(/\/\*DATA_START\*\/([\s\S]*?)\/\*DATA_END\*\//);
+          if (!m) { console.error('DATA block not found'); process.exit(1); }
+          const api = new Function(m[1] + ';return {PACKS,buildData,allAudio};')();
+          const sets = [];
+          for (const lang of Object.keys(api.PACKS)) for (const g of ['m', 'f']) {
+            const list = api.allAudio(api.buildData(lang, g, {}), []);
+            fs.writeFileSync('/tmp/phrases-' + lang + '-' + g + '.tsv', list.map(p => p.id + '\t' + p.text.replace(/\s+/g, ' ')).join('\n') + '\n');
+            sets.push(lang + '-' + g); console.log(lang + '-' + g, list.length, 'phrases');
+          }
+          fs.writeFileSync('/tmp/sets.txt', sets.join('\n') + '\n');
+          EOF
+          node /tmp/extract.js
+          cat > /tmp/gen.sh <<'EOF'
+          #!/bin/bash
+          id="${1%%$'\t'*}"; text="${1#*$'\t'}"; out="www/audio/$SET/$id.mp3"
+          # never overwrite a real recording or a clip that already exists
+          [ -s "$out" ] && exit 0
+          for try in 1 2 3 4; do
+            if [ -n "$AZURE_SPEECH_KEY" ]; then
+              esc=$(printf '%s' "$text" | sed 's/&/\&amp;/g;s/</\&lt;/g;s/>/\&gt;/g')
+              ssml="<speak version='1.0' xml:lang='${VOICE:0:5}'><voice name='$VOICE'><prosody rate='$TTS_RATE'>$esc</prosody></voice></speak>"
+              curl -sf -X POST "https://$AZURE_SPEECH_REGION.tts.speech.microsoft.com/cognitiveservices/v1" \
+                -H "Ocp-Apim-Subscription-Key: $AZURE_SPEECH_KEY" -H "Content-Type: application/ssml+xml" \
+                -H "X-Microsoft-OutputFormat: audio-24khz-48kbitrate-mono-mp3" -H "User-Agent: bolsetu-build" \
+                --data "$ssml" -o "$out" && [ -s "$out" ] && exit 0
+            else
+              edge-tts --voice "$VOICE" --rate="$TTS_RATE" --text "$text" --write-media "$out" >/dev/null 2>&1 && [ -s "$out" ] && exit 0
+            fi
+            rm -f "$out"; sleep $((try * 3))
+          done
+          echo "failed: $SET/$id"
+          exit 0
+          EOF
+          chmod +x /tmp/gen.sh
+          voice_for() {
+            case "$1" in
+              mr-m) echo mr-IN-ManoharNeural ;; mr-f) echo mr-IN-AarohiNeural ;;
+              hi-m) echo hi-IN-MadhurNeural ;;  hi-f) echo hi-IN-SwaraNeural ;;
+              en-m) echo en-US-GuyNeural ;;     en-f) echo en-US-JennyNeural ;;
+            esac
+          }
+          PAR=8; if [ -n "$AZURE_SPEECH_KEY" ]; then PAR=3; fi
+          while read -r set; do
+            export SET="$set" VOICE="$(voice_for "$set")"
+            if [ -z "$VOICE" ]; then echo "no voice configured for $set"; continue; fi
+            mkdir -p "www/audio/$set"
+            xargs -d '\n' -P "$PAR" -n 1 /tmp/gen.sh < "/tmp/phrases-$set.tsv" || true
+            echo "$set: $(ls www/audio/$set | wc -l) of $(wc -l < /tmp/phrases-$set.tsv) clips (missing ones fall back to the phone voice)"
+          done < /tmp/sets.txt
+          du -sh www/audio
+
+      - name: Initialize Capacitor 6 and TTS Plugin v5
+        run: |
+          npm init -y
+          npm install @capacitor/core@6.1.2 @capacitor/cli@6.1.2 @capacitor/android@6.1.2 @capacitor-community/text-to-speech@5.0.0
+          printf '{"appId":"%s","appName":"%s","webDir":"www"}\n' "$APP_ID" "$APP_NAME" > capacitor.config.json
+          npx cap add android
+          npx cap sync android
+
+      - name: Add microphone, camera and speech permissions to the Android manifest
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          # microphone: record family voice + voice meter; camera: the practice mirror
+          # queries: needed by the text-to-speech plugin on Android 11+
+          sed -i 's#</manifest>#    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <queries>\n        <intent>\n            <action android:name="android.intent.action.TTS_SERVICE" />\n        </intent>\n    </queries>\n</manifest>#' "$M"
+          # keep the app upright
+          sed -i '0,/android:name=".MainActivity"/s//android:name=".MainActivity" android:screenOrientation="portrait"/' "$M"
+          cat "$M"
+
+      - name: Keep the same signing key between builds
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: bolsetu-debug-keystore-v1
+
+      - name: Build Debug APK Using Pre-Installed Gradle
+        working-directory: ./android
+        run: |
+          gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Upload Compiled APK for Download
+        uses: actions/upload-artifact@v4
+        with:
+          name: BolSetu-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
