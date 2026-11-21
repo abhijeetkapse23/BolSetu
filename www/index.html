@@ -641,7 +641,8 @@ function mouth(k,size){const g=mgeo(k),id='m'+(++mN);
   <g class="m-pop" stroke="#F6A609" stroke-width="5" stroke-linecap="round" ${mA(g['m-pop'])}><path d="M120 66v-16M94 70l-9-13M146 70l9-13"/></g>
   <g class="m-air" stroke="#6FB1D6" stroke-width="5" stroke-linecap="round" ${mA(g['m-air'])}><path d="M120 152v22M102 149l-9 19M138 149l9 19"/></g></svg>`}
 /* real videos in www/video/<exercise id>.mp4 replace the drawing for that exercise */
-const VIDS=['mv_smile'];
+/* [seconds where the second movement starts, ends] so the words under the video match it */
+const VIDS={mv_smile:[1.0,2.8]};
 /* glide an existing mouth picture to a new shape */
 function mset(svg,k){if(!svg)return;const g=mgeo(k);
   for(const cls in g){svg.querySelectorAll('.'+cls).forEach(el=>{const o=g[cls];for(const p in o){const v=typeof o[p]==='number'?(+o[p]).toFixed(1):o[p];
@@ -886,7 +887,7 @@ const RENDER={
 
  mouth(sl,body){const v=sl.mv;
   body.innerHTML=`<div class="bigtxt long">${v.mr}</div>
-    <div class="mrow"><div id="mBox">${VIDS.includes(v.id)?`<video class="mvid" id="mVid" src="video/${v.id}.mp4" autoplay muted loop playsinline preload="auto"></video>`:mouth(v.a,214)}</div>${mirrorEl}</div>
+    <div class="mrow"><div id="mBox">${VIDS[v.id]?`<video class="mvid" id="mVid" src="video/${v.id}.mp4" autoplay muted loop playsinline preload="auto"></video>`:mouth(v.a,214)}</div>${mirrorEl}</div>
     <div class="cue" id="cue">${v.ta}</div><div class="dots">${'<i></i>'.repeat(5)}</div>
     <div class="row"><button class="btn primary" id="mvGo">${lab('▶ '+tx('सुरू करा'))}</button><button class="btn" id="mirB">${lab(tx('🪞 आरसा'))}</button></div>
     <div class="hint">${tx('चित्राप्रमाणे ५ वेळा करा. आरशात पाहिले तर सोपे जाते.')}</div>`;
@@ -897,6 +898,11 @@ const RENDER={
   const cyc=()=>{if(n>=5){set('rest',tx('छान! 👍'));chime();$('mvGo').hidden=false;$('mvGo').innerHTML=lab('▶ '+tx('पुन्हा करा'));n=0;return}
     set(v.a,v.ta);beep(523,.15,.15);T(()=>{set(v.b,v.tb);T(()=>{dots[n].classList.add('on');n++;cyc()},v.ms)},v.ms)};
   $('mvGo').onclick=()=>{stopAll();demo=false;$('mvGo').hidden=true;dots.forEach(d=>d.classList.remove('on'));cyc()};
+  if($('mVid')){const vd=$('mVid'),win=VIDS[v.id];let lt=0,counting=false;
+    vd.ontimeupdate=()=>{const t=vd.currentTime;$('cue').textContent=(t>win[0]&&t<win[1])?v.tb:v.ta;
+      if(counting&&t<lt-1){dots[n].classList.add('on');n++;beep(523,.15,.15);
+        if(n>=5){counting=false;chime();n=0;$('mvGo').hidden=false;$('mvGo').innerHTML=lab('▶ '+tx('पुन्हा करा'))}}lt=t};
+    $('mvGo').onclick=()=>{stopAll();dots.forEach(d=>d.classList.remove('on'));n=0;lt=0;vd.currentTime=0;counting=true;$('mvGo').hidden=true;const pp=vd.play();if(pp&&pp.catch)pp.catch(()=>{})}}
   wireMirror();T(()=>say(v.id,v.speak),450)},
 
  yn(sl,body){const c=sl.card,q=sl.ask,qw=q.w||q.mr,ans=c.id===q.id,txt=fmt(DATA.tpl.isThis,inWord(DATA,qw));
