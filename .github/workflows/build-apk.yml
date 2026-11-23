@@ -148,8 +148,8 @@ jobs:
         run: |
           M=android/app/src/main/AndroidManifest.xml
           # microphone: record family voice + voice meter; camera: the practice mirror
-          # queries: needed by the text-to-speech plugin on Android 11+
-          sed -i 's#</manifest>#    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <queries>\n        <intent>\n            <action android:name="android.intent.action.TTS_SERVICE" />\n        </intent>\n    </queries>\n</manifest>#' "$M"
+          # queries: text-to-speech plugin, and the camera app for "Add a photo > Camera" (Android 11+ hides apps not listed here)
+          sed -i 's#</manifest>#    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.CAMERA" />\n    <uses-feature android:name="android.hardware.camera" android:required="false" />\n    <queries>\n        <intent>\n            <action android:name="android.intent.action.TTS_SERVICE" />\n        </intent>\n        <intent>\n            <action android:name="android.media.action.IMAGE_CAPTURE" />\n        </intent>\n    </queries>\n</manifest>#' "$M"
           # keep the app upright
           sed -i '0,/android:name=".MainActivity"/s//android:name=".MainActivity" android:screenOrientation="portrait"/' "$M"
           cat "$M"
