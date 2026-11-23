@@ -686,8 +686,8 @@ function mouth(k,size){const g=mgeo(k),id='m'+(++mN);
   <g class="m-pop" stroke="#F6A609" stroke-width="5" stroke-linecap="round" ${mA(g['m-pop'])}><path d="M120 66v-16M94 70l-9-13M146 70l9-13"/></g>
   <g class="m-air" stroke="#6FB1D6" stroke-width="5" stroke-linecap="round" ${mA(g['m-air'])}><path d="M120 152v22M102 149l-9 19M138 149l9 19"/></g></svg>`}
 /* real videos in www/video/<exercise id>.mp4 replace the drawing for that exercise */
-/* [seconds where the second movement starts, ends] so the words under the video match it */
-const VIDS={mv_smile:[1.0,2.8]};
+/* time ranges (seconds) when the second instruction shows, so the words under the video match it */
+const VIDS={mv_smile:[[1.0,2.8]],mv_puff:[[0,0.45],[5.0,99]]};
 /* glide an existing mouth picture to a new shape */
 function mset(svg,k){if(!svg)return;const g=mgeo(k);
   for(const cls in g){svg.querySelectorAll('.'+cls).forEach(el=>{const o=g[cls];for(const p in o){const v=typeof o[p]==='number'?(+o[p]).toFixed(1):o[p];
@@ -955,7 +955,7 @@ const RENDER={
   if($('mVid')){const vd=$('mVid'),win=VIDS[v.id];let counting=false;
     cleanups.push(()=>{vd.ontimeupdate=vd.onended=vd.onerror=null;try{vd.pause();vd.removeAttribute('src');vd.load()}catch(e){}});
     const play=()=>{const pp=vd.play();if(pp&&pp.catch)pp.catch(()=>{})};
-    vd.ontimeupdate=()=>{const t=vd.currentTime;$('cue').textContent=(t>win[0]&&t<win[1])?v.tb:v.ta};
+    vd.ontimeupdate=()=>{const t=vd.currentTime;$('cue').textContent=win.some(r=>t>r[0]&&t<r[1])?v.tb:v.ta};
     vd.onended=()=>{if(counting){dots[n].classList.add('on');n++;beep(523,.15,.15);if(n>=5){counting=false;n=0;chime();$('cue').textContent=tx('छान! 👍');return}}vd.currentTime=0;play()};
     $('mvGo').onclick=()=>{stopAll();dots.forEach(d=>d.classList.remove('on'));n=0;vd.currentTime=0;counting=true;play();$('mvGo').innerHTML=lab('↺ '+tx('पुन्हा करा'))}}
   wireMirror();T(()=>say(v.id,v.speak),450)},
