@@ -1,4 +1,4 @@
-name: Build BolSetu Android APK
+name: Build echoSignal Android APK
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  APP_NAME: BolSetu
+  APP_NAME: echoSignal
   APP_ID: com.bolsetu.app
   TTS_RATE: "-8%"
 
@@ -168,5 +168,5 @@ jobs:
       - name: Upload Compiled APK for Download
         uses: actions/upload-artifact@v4
         with:
-          name: BolSetu-Android-APK
+          name: echoSignal-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
