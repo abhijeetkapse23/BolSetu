@@ -723,7 +723,7 @@ function mouth(k,size){const g=mgeo(k),id='m'+(++mN);
   <g class="m-air" stroke="#6FB1D6" stroke-width="5" stroke-linecap="round" ${mA(g['m-air'])}><path d="M120 152v22M102 149l-9 19M138 149l9 19"/></g></svg>`}
 /* real videos in www/video/<exercise id>.mp4 replace the drawing for that exercise */
 /* time ranges (seconds) when the second instruction shows, so the words under the video match it */
-const VIDS={mv_smile:[[1.0,2.8]],mv_puff:[[0,0.45],[5.0,99]],mv_blow:[[0,0.7],[4.8,99]]};
+const VIDS={mv_smile:[[1.0,2.8]],mv_puff:[[0,0.45],[5.0,99]],mv_blow:[[0,0.7],[4.8,99]],pr_spoon:[[0,0.9],[6.8,99]],pr_lift:[[0,1.8],[6.9,99]]};
 /* glide an existing mouth picture to a new shape */
 function mset(svg,k){if(!svg)return;const g=mgeo(k);
   for(const cls in g){svg.querySelectorAll('.'+cls).forEach(el=>{const o=g[cls];for(const p in o){const v=typeof o[p]==='number'?(+o[p]).toFixed(1):o[p];
