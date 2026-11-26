@@ -593,16 +593,37 @@ async function say(id,text){
   if(tok!==sayTok)return;
   if(!noClip[id]&&!/^[xp]\d/.test(String(id))){if(await playSrc('audio/'+S.lang+'-'+(S.voice==='f'?'f':'m')+'/'+id+'.mp3',S.slow?.88:1))return;noClip[id]=1}
   if(tok!==sayTok||!text)return;
-  const rate=S.slow?.75:.95;
+  const rate=S.slow?.75:.95,pv=await pickVoice(S.voice==='f'?'f':'m');if(tok!==sayTok)return;
   const TTS=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.TextToSpeech;
-  if(TTS){for(const lang of DATA.tts){try{await TTS.speak({text:text,lang:lang,rate:rate,pitch:1,volume:1,category:'playback'});return}catch(e){}}}
+  if(TTS){if(pv&&pv.i!=null){try{await TTS.speak({text:text,lang:pv.lang,rate:rate,pitch:pv.pitch,volume:1,voice:pv.i,category:'playback'});return}catch(e){}}
+    for(const lang of DATA.tts){try{await TTS.speak({text:text,lang:lang,rate:rate,pitch:pv?pv.pitch:1,volume:1,category:'playback'});return}catch(e){}}}
   if('speechSynthesis' in window){await new Promise(res=>{try{
-    const all=speechSynthesis.getVoices()||[];
-    const vc=DATA.tts.map(l=>all.find(x=>String(x.lang).toLowerCase().indexOf(l.slice(0,2))===0)).find(Boolean);
     const u=new SpeechSynthesisUtterance(text);window.__u=u;
-    if(vc){u.voice=vc;u.lang=vc.lang}else u.lang=DATA.tts[0];
-    u.rate=rate;u.onend=u.onerror=()=>res();speechSynthesis.speak(u);setTimeout(res,8000)}catch(e){res()}})}
+    if(pv&&pv.v){u.voice=pv.v;u.lang=pv.v.lang}else u.lang=DATA.tts[0];
+    u.rate=rate;u.pitch=pv?pv.pitch:1;u.onend=u.onerror=()=>res();speechSynthesis.speak(u);setTimeout(res,8000)}catch(e){res()}})}
 }
+/* phone voice that matches the chosen man/woman setting (used for typed-in names and anything without a recorded clip) */
+let VOX=null;const VPICK={};
+const V_M=/(\bmale\b|-hid-|-hie-|-end-|-ene-|-iol-|-iom-|-tpd-|-gbd-|-rjs-|-gbg-|madhur|manohar|hemant|prabhat|ravi|guy|david|mark|george)/i,
+      V_F=/(female|-hia-|-hic-|-ena-|-enc-|-sfg-|-tpc-|-tpf-|-gba-|-gbc-|-mrf-|swara|aarohi|kalpana|heera|neerja|jenny|zira|hazel|susan)/i;
+const vGender=n=>/female/i.test(n)?'f':V_M.test(n)?'m':V_F.test(n)?'f':'?';
+async function voiceList(){if(VOX)return VOX;VOX=[];
+  try{const TTS=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.TextToSpeech;
+    if(TTS&&TTS.getSupportedVoices){const r=await TTS.getSupportedVoices();VOX=(r.voices||[]).map((v,i)=>({i:i,name:String(v.voiceURI||'')+' '+String(v.name||''),lang:String(v.lang||'').replace('_','-')}))}
+    else if('speechSynthesis' in window){let a=speechSynthesis.getVoices()||[];if(!a.length){await new Promise(r=>{speechSynthesis.onvoiceschanged=r;setTimeout(r,1200)});a=speechSynthesis.getVoices()||[]}
+      VOX=a.map(v=>({v:v,name:v.name+' '+v.voiceURI,lang:String(v.lang).replace('_','-')}))}}catch(e){VOX=[]}
+  if(!VOX.length)VOX=null;return VOX||[]}
+async function pickVoice(want){const key=S.lang+want;if(VPICK[key]!==undefined)return VPICK[key];
+  const L=await voiceList();if(!L.length)return null;
+  const langs=DATA.tts.map(l=>l.toLowerCase()),inLang=(v,l)=>v.lang.toLowerCase().indexOf(l.slice(0,2))===0;
+  const local=v=>/local|offline/i.test(v.name)?0:1,best=a=>a.sort((x,y)=>local(x)-local(y))[0];
+  let pick=null,pitch=1;
+  // 1) right gender in the app's languages, in order; 2) for Marathi, a Hindi voice of the right gender reads Devanagari well
+  for(const l of langs.concat(S.lang==='mr'?['hi-in']:[])){const m=best(L.filter(v=>inLang(v,l)&&vGender(v.name)===want));if(m){pick=m;break}}
+  // 3) a voice whose gender we can't tell (not the wrong one); 4) any voice in the language, with pitch nudged toward the chosen voice
+  if(!pick)for(const l of langs){const m=best(L.filter(v=>inLang(v,l)&&vGender(v.name)==='?'));if(m){pick=m;break}}
+  if(!pick)for(const l of langs){const m=best(L.filter(v=>inLang(v,l)));if(m){pick=m;pitch=want==='m'?.82:1.12;break}}
+  return VPICK[key]=pick?{i:pick.i,v:pick.v,lang:pick.lang,pitch:pitch}:null}
 
 /* recorder: tap to start, tap again to stop (auto-stops) */
 let rec=null;
