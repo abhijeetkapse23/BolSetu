@@ -7,7 +7,7 @@ on:
 
 env:
   APP_NAME: echoSignal
-  APP_ID: com.bolsetu.app
+  APP_ID: com.echosignal.app
   TTS_RATE: "-8%"
 
 jobs:
@@ -18,21 +18,19 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22 (Capacitor 8)
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
-      - name: Set up JDK 17 (Capacitor 6 / SDK 34)
+      - name: Set up JDK 21 (Capacitor 8 / Android 16, API 36)
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
-      - name: Set up Pre-Cached Gradle 8.7
+      - name: Set up Gradle caching
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.7'
 
       - name: Set up Python (for voice generation)
         uses: actions/setup-python@v5
@@ -69,9 +67,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: www/audio
-          key: bolsetu-audio-v1-${{ github.run_id }}
+          # separate caches: clips made with the licensed Azure service never mix with the free test-tool clips
+          key: audio-${{ secrets.AZURE_SPEECH_KEY != '' && 'azure' || 'edge' }}-v1-${{ github.run_id }}
           restore-keys: |
-            bolsetu-audio-v1-
+            audio-${{ secrets.AZURE_SPEECH_KEY != '' && 'azure' || 'edge' }}-v1-
 
       - name: Generate voice clips for every language (audio/<language>-<m|f>/<id>.mp3)
         continue-on-error: true
@@ -136,11 +135,12 @@ jobs:
           done < /tmp/sets.txt
           du -sh www/audio
 
-      - name: Initialize Capacitor 6 and TTS Plugin v5
+      - name: Initialize Capacitor 8 (targets Android 16, API 36) and the speech plugin
         run: |
           npm init -y
-          npm install @capacitor/core@6.1.2 @capacitor/cli@6.1.2 @capacitor/android@6.1.2 @capacitor-community/text-to-speech@5.0.0 @capacitor/app@6.0.1
-          printf '{"appId":"%s","appName":"%s","webDir":"www"}\n' "$APP_ID" "$APP_NAME" > capacitor.config.json
+          npm install @capacitor/core@^8.3.2 @capacitor/cli@^8.3.2 @capacitor/android@^8.3.2 @capacitor-community/text-to-speech@^8.0.0 @capacitor/app@^8.0.0
+          # insetsHandling "css": Capacitor passes the status-bar / gesture-bar sizes to the page as --safe-area-inset-* variables
+          printf '{"appId":"%s","appName":"%s","webDir":"www","plugins":{"SystemBars":{"insetsHandling":"css","style":"LIGHT"}}}\n' "$APP_ID" "$APP_NAME" > capacitor.config.json
           npx cap add android
           npx cap sync android
 
@@ -154,19 +154,55 @@ jobs:
           sed -i '0,/android:name=".MainActivity"/s//android:name=".MainActivity" android:screenOrientation="portrait"/' "$M"
           cat "$M"
 
-      - name: Keep the same signing key between builds
+      - name: App icon
+        run: |
+          # icon files are made from branding/ (see branding/README); they replace Capacitor's default icon
+          if [ -d branding/res ]; then cp -r branding/res/. android/app/src/main/res/; fi
+          ls android/app/src/main/res/mipmap-xxxhdpi || true
+
+      - name: Version number (goes up by one with every build)
+        run: |
+          G=android/app/build.gradle
+          sed -i -E "s/versionCode[ =]+[0-9]+/versionCode = ${{ github.run_number }}/; s/versionName[ =]+\"[^\"]*\"/versionName = \"1.0.${{ github.run_number }}\"/" $G
+          grep -nE "versionCode|versionName|targetSdk|minSdk" $G android/variables.gradle || true
+
+      - name: Keep the same test signing key between builds
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
           key: bolsetu-debug-keystore-v1
 
-      - name: Build Debug APK Using Pre-Installed Gradle
+      - name: Build the test APK (for installing directly on a phone)
+        working-directory: ./android
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Build the signed Play Store bundle (AAB)
+        # needs the repository secret UPLOAD_KEY: line 1 = password, the rest = the upload keystore in base64
+        env:
+          UPLOAD_KEY: ${{ secrets.UPLOAD_KEY }}
+        if: env.UPLOAD_KEY != ''
         working-directory: ./android
         run: |
-          gradle assembleDebug --no-daemon --stacktrace
+          printf '%s\n' "$UPLOAD_KEY" | head -n1 | tr -d '\r\n ' > /tmp/kp
+          printf '%s\n' "$UPLOAD_KEY" | tail -n +2 | tr -d '\r\n ' | base64 -d > /tmp/upload.jks
+          KP=$(cat /tmp/kp)
+          ./gradlew bundleRelease --no-daemon --stacktrace \
+            -Pandroid.injected.signing.store.file=/tmp/upload.jks \
+            -Pandroid.injected.signing.store.password="$KP" \
+            -Pandroid.injected.signing.key.alias=upload \
+            -Pandroid.injected.signing.key.password="$KP"
+          rm -f /tmp/kp /tmp/upload.jks
+          ls -la app/build/outputs/bundle/release/
 
-      - name: Upload Compiled APK for Download
+      - name: Upload the test APK
         uses: actions/upload-artifact@v4
         with:
           name: echoSignal-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload the Play Store bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: echoSignal-PlayStore-AAB
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: ignore
