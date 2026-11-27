@@ -327,6 +327,7 @@ svg.i{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;stro
 .mouth{height:auto;flex:none;display:block;filter:drop-shadow(0 18px 24px rgba(120,60,40,.18))}
 .mouth *{transition:d .55s var(--ease),cx .55s var(--ease),cy .55s var(--ease),rx .55s var(--ease),ry .55s var(--ease),y .55s var(--ease),opacity .4s,transform .55s var(--ease)}
 .mrow{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.mvid.shv{border-radius:26px}
 .mvid{width:min(280px,72vw);aspect-ratio:1;border-radius:48px;object-fit:cover;background:#E9EEEA;box-shadow:var(--sh3);border:4px solid #fff;display:block}
 .need{width:100%;display:flex;align-items:center;gap:10px;background:var(--mor-t);color:var(--mor);border-radius:16px;padding:10px 14px;font-weight:700;text-align:left}.need .fx{width:34px;height:34px}
 .care{width:100%;display:flex;gap:10px;align-items:flex-start;background:var(--kunku-t);color:#8A1626;border-radius:16px;padding:12px 14px;font-weight:700;text-align:left;line-height:1.45}.care .fx{width:24px;height:24px;flex:none}
@@ -723,6 +724,9 @@ function mouth(k,size){const g=mgeo(k),id='m'+(++mN);
   <g class="m-air" stroke="#6FB1D6" stroke-width="5" stroke-linecap="round" ${mA(g['m-air'])}><path d="M120 152v22M102 149l-9 19M138 149l9 19"/></g></svg>`}
 /* real videos in www/video/<exercise id>.mp4 replace the drawing for that exercise */
 /* time ranges (seconds) when the second instruction shows, so the words under the video match it */
+/* sound mouth-shape clips: video/sh_<shape>.mp4, listed here once added (a aa ee oo e o m t k) */
+const SHV=new Set([]);
+const mouthOr=(k,sz)=>SHV.has(k)?`<video class="mvid shv" src="video/sh_${k}.mp4" autoplay muted loop playsinline preload="auto" style="width:${Math.round(sz*1.3)}px;height:${Math.round(sz*1.3)}px"></video>`:mouth(k,sz);
 const VIDS={mv_smile:[[1.0,2.8]],mv_puff:[[0,0.45],[5.0,99]],mv_blow:[[0,0.7],[4.8,99]],pr_spoon:[[0,0.9],[6.8,99]],pr_lift:[[0,1.8],[6.9,99]],pr_cheek:[[5.3,8.0]],pr_straw:[[0,0.45],[4.1,99]]};
 /* glide an existing mouth picture to a new shape */
 function mset(svg,k){if(!svg)return;const g=mgeo(k);
@@ -934,10 +938,12 @@ const selfBtn=`<button class="btn" id="selfRec">${lab(tx('🎙 माझा आ�
 function wireSelf(){const b=$('selfRec');if(b)b.onclick=()=>recToggle(b,url=>playSrc(url,1),7000)}
 const RENDER={
  breath(sl,body){
-  body.innerHTML=`<div class="orbwrap"><div class="orb" id="orb"></div></div><div class="cue" id="cue">${tx('आरामात बसा, खांदे सैल सोडा')}</div><div class="count" id="cnt"></div>
+  const bv=!!VIDS.breath;
+  body.innerHTML=`${bv?'<div class="mrow"><video class="mvid" id="bVid" src="video/breath.mp4" muted playsinline preload="auto"></video></div><div id="orb" hidden></div>':'<div class="orbwrap"><div class="orb" id="orb"></div></div>'}<div class="cue" id="cue">${tx('आरामात बसा, खांदे सैल सोडा')}</div><div class="count" id="cnt"></div>
     <div class="hint">${tx('नाकाने श्वास घ्या, तोंडाने हळू सोडा')}</div>`;
   let i=0;const orb=$('orb');
   const cyc=()=>{if(i>=sl.n){$('cue').textContent=tx('छान! 👍');return}i++;$('cnt').textContent=N(i)+' / '+N(sl.n);
+    {const v=$('bVid');if(v){try{v.currentTime=0;v.play()}catch(e){}}}
     $('cue').textContent=tx('श्वास घ्या…');orb.style.transition='transform 4s ease-in-out';orb.style.transform='scale(1)';
     T(()=>{$('cue').textContent=tx('हळू सोडा… फूऽऽऽ');orb.style.transition='transform 6s ease-in-out';orb.style.transform='scale(.5)';T(cyc,6200)},4000)};
   T(cyc,1200)},
@@ -954,7 +960,7 @@ const RENDER={
     if(sounding&&l>.025){voiced+=.1;$('cnt').textContent=N(round)+'/'+N(sl.n)+tx(' · आवाज ')+N(voiced.toFixed(1))+tx(' से')}},100);
   cleanups.push(()=>clearInterval(iv));
   const ph=(k,txt,ms,sc)=>{body.querySelectorAll('.aum-l span').forEach(s=>s.classList.toggle('on',s.dataset.k===k));
-    mset($('aM').firstElementChild,{a:'aa',u:'oo',m:'m'}[k]||'rest');$('cue').textContent=txt;orb.style.transition='transform '+ms+'ms linear';orb.style.transform='scale('+sc+')'};
+    {const mk={a:'aa',u:'oo',m:'m'}[k]||'rest';if(SHV.has(mk)||(k===''&&SHV.size)){$('aM').innerHTML=mouthOr(mk,140)}else if($('aM').firstElementChild&&$('aM').firstElementChild.tagName!=='VIDEO')mset($('aM').firstElementChild,mk);else $('aM').innerHTML=mouth(mk,140)}$('cue').textContent=txt;orb.style.transition='transform '+ms+'ms linear';orb.style.transform='scale('+sc+')'};
   const cyc=()=>{if(round>=sl.n){ph('',tx('ॐ शांती. खूप छान! 🙏'),500,.7);$('aGo').hidden=false;$('aGo').textContent=tx('पुन्हा करा');round=0;return}
     round++;voiced=0;sounding=false;$('cnt').textContent=N(round)+' / '+N(sl.n);
     ph('',tx('नाकाने खोल श्वास घ्या'),3000,1);
@@ -969,7 +975,7 @@ const RENDER={
 
  drill(sl,body){
   body.innerHTML=`${sl.card?`<div class="${sl.card.cat}">${pic(sl.card,'xl')}</div>`:sl.icon?`<div class="pic sm">${fx(sl.icon)}</div>`:''}<div class="bigtxt ${sl.long?'long':''}" style="margin-top:${sl.parts||sl.m||sl.card||sl.icon?0:24}px">${sl.big}</div>${sl.sub?`<div class="subt">${sl.sub}</div>`:''}
-    ${sl.m?`<div class="mrow">${sl.m.map(k=>mouth(k,sl.m.length>2?92:118)).join('<b class="then">›</b>')}${mirrorEl}</div><div class="tip">${sl.tip}</div>`:''}
+    ${sl.m?`<div class="mrow">${sl.m.map(k=>mouthOr(k,sl.m.length>2?92:118)).join('<b class="then">›</b>')}${mirrorEl}</div><div class="tip">${sl.tip}</div>`:''}
     ${sl.parts?`<div class="chips">${sl.parts.map(p=>`<span class="chip s">${p}</span>`).join('')}</div>`:''}
     <div class="hint">${sl.hint}</div>
     <div class="row"><button class="btn primary" id="dPlay">${lab(tx('🔊 ऐका'))}</button>${selfBtn}${sl.m?'<button class="btn" id="mirB">'+lab(tx('🪞 आरसा'))+'</button>':''}</div>`;
