@@ -727,7 +727,7 @@ function mouth(k,size){const g=mgeo(k),id='m'+(++mN);
 /* sound mouth-shape clips: video/sh_<shape>.mp4, listed here once added (a aa ee oo e o m t k) */
 const SHV=new Set(['a','aa','ee','oo','e','o','m','t','k']);
 const mouthOr=(k,sz)=>SHV.has(k)?`<video class="mvid shv" src="video/sh_${k}.mp4" autoplay muted loop playsinline preload="auto" style="width:${Math.round(sz*1.3)}px;height:${Math.round(sz*1.3)}px"></video>`:mouth(k,sz);
-const VIDS={mv_smile:[[1.0,2.8]],mv_puff:[[0,0.45],[5.0,99]],mv_blow:[[0,0.7],[4.8,99]],pr_spoon:[[0,0.9],[6.8,99]],pr_lift:[[0,1.8],[6.9,99]],pr_cheek:[[5.3,8.0]],pr_straw:[[0,0.45],[4.1,99]],breath:[[0,0]],mel:[[0,0]],mv_open:[[1.2,99]],mv_tout:[[1.3,99]],mv_pop:[[0.9,99]],mv_tside:[[1.5,99]],mv_tup:[[1.5,99]]};
+const VIDS={mv_smile:[[1.0,2.8]],mv_puff:[[0,0.45],[5.0,99]],mv_blow:[[0,0.7],[4.8,99]],pr_spoon:[[0,0.9],[6.8,99]],pr_lift:[[0,1.8],[6.9,99]],pr_cheek:[[5.3,8.0]],pr_straw:[[0,0.45],[4.1,99]],breath:[[0,0]],mel:[[0,0]],mv_open:[[1.2,99]],mv_tout:[[1.3,99]],mv_pop:[[0.9,99]],mv_tside:[[1.5,99]],mv_tup:[[1.5,99]],pr_lips:[[2.8,99]],pr_trill:[[0.3,1.8]],pr_paper:[[2.2,99]]};
 /* glide an existing mouth picture to a new shape */
 function mset(svg,k){if(!svg)return;const g=mgeo(k);
   for(const cls in g){svg.querySelectorAll('.'+cls).forEach(el=>{const o=g[cls];for(const p in o){const v=typeof o[p]==='number'?(+o[p]).toFixed(1):o[p];
