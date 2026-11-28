@@ -174,7 +174,13 @@ jobs:
 
       - name: Build the test APK (for installing directly on a phone)
         working-directory: ./android
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        # Maven Central sometimes answers "429 Too Many Requests"; wait and try again (downloaded files are kept between tries)
+        run: |
+          for n in 1 2 3 4; do
+            ./gradlew assembleDebug --no-daemon && exit 0
+            echo "Build attempt $n failed, retrying in $((n*45)) seconds"; sleep $((n*45))
+          done
+          exit 1
 
       - name: Build the signed Play Store bundle (AAB)
         # needs the repository secret UPLOAD_KEY: line 1 = password, the rest = the upload keystore in base64
